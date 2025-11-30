@@ -1,0 +1,58 @@
+# Python虚拟环境
+venv/
+env/
+*.venv/
+
+# 依赖目录
+__pycache__/
+.pytest_cache/
+
+# 日志文件
+*.log
+logs/
+
+# 配置文件
+*.json
+!favorites.json
+
+# 数据目录
+arxiv_papers/
+favorites/
+
+# 临时文件
+*.tmp
+*.temp
+*.swp
+*.swo
+
+# IDE配置
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# 编译后的文件
+*.pyc
+*.pyo
+*.pyd
+
+# 测试文件
+*.test.py
+*.spec
+
+# 打包文件
+*.egg-info/
+dist/
+build/
+
+# 其他
+.env
+.env.local
+.env.*.local
