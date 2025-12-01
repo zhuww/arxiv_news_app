@@ -247,14 +247,94 @@ class ArxivNewsApp:
         self.reminder_thread = threading.Thread(target=self.reminder_loop, daemon=True)
         self.reminder_thread.start()
         
-        # 测试：立即运行一次搜索和提醒
-        # self.test_immediate_run()  # 注释掉，因为该方法不存在
-        
         # 将程序添加到Windows自动运行列表
         self.add_to_auto_start()
         
         # 注册窗口关闭事件
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+        
+        # 自动搜索最新文献并预生成语音
+        def auto_search_and_pregenerate():
+            # 搜索最新文献
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            papers = loop.run_until_complete(self.search_papers())
+            self.current_papers = papers
+            
+            # 如果找到论文，预生成语音文件
+            if papers:
+                logger.info(f"自动搜索完成，找到 {len(papers)} 篇论文，开始预生成语音文件")
+                
+                # 清理之前的预生成文件
+                if hasattr(self, 'pregenerated_speech'):
+                    for speech_path in self.pregenerated_speech.values():
+                        if os.path.exists(speech_path):
+                            os.unlink(speech_path)
+                
+                self.pregenerated_speech = {}
+                self.speech_generating = {}
+                
+                # 预生成所有论文的语音文件
+                for i, paper in enumerate(papers):
+                    # 标记该论文正在生成语音
+                    self.speech_generating[i] = True
+                    
+                    try:
+                        # 清理LaTeX数学标识符
+                        title = re.sub(r'\$.*?\$', '', paper["title"])
+                        abstract = re.sub(r'\$.*?\$', '', paper["abstract"])
+                        
+                        # 翻译标题和摘要
+                        translated_title = translator.translate(title)
+                        translated_abstract = translator.translate(abstract)
+                        
+                        # 构建总结
+                        summary = f"{translated_title}：{translated_abstract}"
+                        
+                        # 生成语音文件
+                        import tempfile
+                        temp_file = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False, mode='wb')
+                        temp_file_path = temp_file.name
+                        temp_file.close()
+                        
+                        logger.info(f"预生成语音文件 {i+1}/{len(papers)}: {temp_file_path}")
+                        
+                        # 使用edge-tts生成语音
+                        import subprocess
+                        import sys
+                        
+                        # 转义命令中的特殊字符
+                        escaped_summary = summary.replace('"', '\\"').replace("'", "\\'")
+                        escaped_temp_path = temp_file_path.replace('\\', '\\\\')
+                        
+                        # 构建edge-tts命令
+                        cmd = [
+                            sys.executable, "-c",
+                            f"import edge_tts; import asyncio; asyncio.run(edge_tts.Communicate('{escaped_summary}', 'zh-CN-XiaoxiaoNeural').save('{escaped_temp_path}'))"
+                        ]
+                        
+                        # 执行命令
+                        subprocess.run(cmd, check=True, capture_output=True, text=True)
+                        
+                        # 保存生成的语音文件路径
+                        self.pregenerated_speech[i] = temp_file_path
+                    except Exception as e:
+                        logger.error(f"预生成语音文件失败: {e}")
+                        # 如果生成失败，清理临时文件
+                        if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
+                            os.unlink(temp_file_path)
+                    finally:
+                        # 标记该论文语音生成完成
+                        if i in self.speech_generating:
+                            del self.speech_generating[i]
+                
+                logger.info("所有语音文件预生成完成")
+            else:
+                logger.info("自动搜索未找到新论文")
+        
+        # 在后台线程中执行自动搜索和预生成
+        auto_thread = threading.Thread(target=auto_search_and_pregenerate, daemon=True)
+        auto_thread.start()
         
     def setup_styles(self):
         """配置ttk样式，使其更加现代和卡通化。"""
